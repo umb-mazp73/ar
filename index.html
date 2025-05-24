@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>AR.js Figuras Móviles Pequeñas con Zoom</title>
+    <title>AR.js Figuras Móviles Pequeñas con Zoom y Gestos</title>
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.3.2/aframe/build/aframe-ar.min.js"></script>
     <style>
@@ -18,99 +18,119 @@
         top: 0; left: 0;
         width: 100%; height: 100%;
       }
-      .controls {
-        position: fixed;
-        bottom: 10px;
-        left: 10px;
-        z-index: 999;
-        background: rgba(255,255,255,0.85);
-        padding: 10px;
-        border-radius: 8px;
-        font-family: Arial, sans-serif;
-        max-width: 95vw;
-        overflow-x: auto;
-      }
-      .controls h4 {
-        margin: 5px 0 3px 0;
-      }
-      .controls button {
-        margin: 2px 5px 5px 0;
-        font-size: 16px; /* un poco más pequeño para móvil */
-        padding: 5px 8px;
-        cursor: pointer;
-      }
-      .zoom-controls {
-        display: inline-block;
-        margin-left: 10px;
-      }
     </style>
   </head>
   <body>
     <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-      <!-- Figuras AR aún más pequeñas -->
-      <a-box id="cubo" position="-1 0.15 0" color="#4CC3D9" depth="0.25" height="0.25" width="0.25" shadow scale="1 1 1"></a-box>
-      <a-sphere id="esfera" position="0 0.15 0" radius="0.125" color="#EF2D5E" scale="1 1 1"></a-sphere>
-      <a-cone id="cono" position="1 0.15 0" radius-bottom="0.125" height="0.25" color="#FFC65D" scale="1 1 1"></a-cone>
+      <!-- Figuras AR más pequeñas y juntas -->
+      <a-box id="cubo" position="-0.5 0.15 0" color="#4CC3D9" depth="0.15" height="0.15" width="0.15" shadow scale="1 1 1"></a-box>
+      <a-sphere id="esfera" position="0 0.15 0" radius="0.075" color="#EF2D5E" scale="1 1 1"></a-sphere>
+      <a-cone id="cono" position="0.5 0.15 0" radius-bottom="0.075" height="0.15" color="#FFC65D" scale="1 1 1"></a-cone>
 
       <!-- Cámara con marcador Hiro -->
       <a-marker-camera preset="hiro"></a-marker-camera>
     </a-scene>
 
-    <!-- Controles para mover y hacer zoom -->
-    <div class="controls">
-      <h4>Cubo
-        <span class="zoom-controls">
-          <button onclick="zoom('cubo', 1.1)">+</button>
-          <button onclick="zoom('cubo', 0.9)">−</button>
-        </span>
-      </h4>
-      <button onclick="move('cubo', 'x', -0.05)">←</button>
-      <button onclick="move('cubo', 'z', -0.05)">↑</button>
-      <button onclick="move('cubo', 'z', 0.05)">↓</button>
-      <button onclick="move('cubo', 'x', 0.05)">→</button>
-
-      <h4>Esfera
-        <span class="zoom-controls">
-          <button onclick="zoom('esfera', 1.1)">+</button>
-          <button onclick="zoom('esfera', 0.9)">−</button>
-        </span>
-      </h4>
-      <button onclick="move('esfera', 'x', -0.05)">←</button>
-      <button onclick="move('esfera', 'z', -0.05)">↑</button>
-      <button onclick="move('esfera', 'z', 0.05)">↓</button>
-      <button onclick="move('esfera', 'x', 0.05)">→</button>
-
-      <h4>Cono
-        <span class="zoom-controls">
-          <button onclick="zoom('cono', 1.1)">+</button>
-          <button onclick="zoom('cono', 0.9)">−</button>
-        </span>
-      </h4>
-      <button onclick="move('cono', 'x', -0.05)">←</button>
-      <button onclick="move('cono', 'z', -0.05)">↑</button>
-      <button onclick="move('cono', 'z', 0.05)">↓</button>
-      <button onclick="move('cono', 'x', 0.05)">→</button>
-    </div>
-
     <script>
-      function move(id, axis, delta) {
-        const el = document.getElementById(id);
-        const pos = el.getAttribute('position');
-        pos[axis] += delta;
-        el.setAttribute('position', pos);
-      }
+      // Para cada figura, permitimos moverla y hacer zoom con gestos táctiles separados
 
-      function zoom(id, factor) {
+      // Variables para gestionar gestos por figura
+      const figures = ['cubo', 'esfera', 'cono'];
+
+      figures.forEach(id => {
         const el = document.getElementById(id);
-        const scale = el.getAttribute('scale');
-        // Multiplicar cada componente de la escala por el factor zoom
-        const newScale = {
-          x: scale.x * factor,
-          y: scale.y * factor,
-          z: scale.z * factor,
-        };
-        el.setAttribute('scale', newScale);
-      }
+
+        // Variables de estado para gestos
+        let isDragging = false;
+        let startTouch = null;
+        let lastPos = null;
+
+        let initialScale = null;
+        let pinchStartDistance = null;
+
+        // Función para calcular distancia entre dos toques
+        function getDistance(touches) {
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          return Math.sqrt(dx*dx + dy*dy);
+        }
+
+        // Touch start
+        el.addEventListener('touchstart', (evt) => {
+          evt.preventDefault();
+          const touches = evt.touches;
+
+          if (touches.length === 1) {
+            // Comienza drag
+            isDragging = true;
+            startTouch = { x: touches[0].clientX, y: touches[0].clientY };
+            lastPos = el.getAttribute('position');
+          } else if (touches.length === 2) {
+            // Comienza pinch (zoom)
+            isDragging = false;
+            pinchStartDistance = getDistance(touches);
+            initialScale = el.getAttribute('scale');
+          }
+        }, { passive: false });
+
+        // Touch move
+        el.addEventListener('touchmove', (evt) => {
+          evt.preventDefault();
+          const touches = evt.touches;
+
+          if (touches.length === 1 && isDragging) {
+            // Mover figura
+
+            // Diferencia en pantalla
+            const dx = touches[0].clientX - startTouch.x;
+            const dy = touches[0].clientY - startTouch.y;
+
+            // Convertir pixeles a unidades A-Frame (ajustar factor)
+            // Este factor puede requerir ajuste según cámara y escena
+            const factor = 0.0015;
+
+            // Nuevo posición, solo en x y z (y fijo)
+            const newX = lastPos.x + dx * factor;
+            const newZ = lastPos.z - dy * factor; // invertimos y para que subir el dedo suba la figura
+
+            el.setAttribute('position', { x: newX, y: lastPos.y, z: newZ });
+          } else if (touches.length === 2 && pinchStartDistance !== null) {
+            // Zoom con pinch
+            const newDistance = getDistance(touches);
+            const scaleFactor = newDistance / pinchStartDistance;
+
+            const newScale = {
+              x: initialScale.x * scaleFactor,
+              y: initialScale.y * scaleFactor,
+              z: initialScale.z * scaleFactor
+            };
+
+            // Limitar escala mínima y máxima para evitar que desaparezca o crezca demasiado
+            const minScale = 0.2;
+            const maxScale = 5;
+
+            newScale.x = Math.min(maxScale, Math.max(minScale, newScale.x));
+            newScale.y = Math.min(maxScale, Math.max(minScale, newScale.y));
+            newScale.z = Math.min(maxScale, Math.max(minScale, newScale.z));
+
+            el.setAttribute('scale', newScale);
+          }
+        }, { passive: false });
+
+        // Touch end
+        el.addEventListener('touchend', (evt) => {
+          evt.preventDefault();
+          if (evt.touches.length === 0) {
+            // Se termina cualquier gesto
+            isDragging = false;
+            pinchStartDistance = null;
+            startTouch = null;
+            lastPos = null;
+            initialScale = null;
+          }
+        }, { passive: false });
+
+      });
     </script>
   </body>
 </html>
